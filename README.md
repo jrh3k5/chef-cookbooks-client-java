@@ -1,4 +1,5 @@
-chef-cookbooks-client-java
-==========================
+# Chef Cookbooks Client (for Java)
 
-A client library for Java that reads data from the cookbooks API.
+This is a Java client that uses the REST API provided by the Chef cookbooks site described here:
+
+http://docs.opscode.com/api_cookbooks_site.html
