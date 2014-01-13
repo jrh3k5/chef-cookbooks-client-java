@@ -34,8 +34,8 @@ limitations under the License.
         <jersey.version>2.5</jersey.version>
     </properties>
     <scm>
-        <connection>git@github.com:jrh3k5/chef-cookbooks-client-java.git</connection>
-        <developerConnection>git@github.com:jrh3k5/chef-cookbooks-client-java.git</developerConnection>
+        <connection>scm:git:git@github.com:jrh3k5/chef-cookbooks-client-java.git</connection>
+        <developerConnection>scm:git:git@github.com:jrh3k5/chef-cookbooks-client-java.git</developerConnection>
         <url>https://github.com/jrh3k5/chef-cookbooks-client-java</url>
     </scm>
     <issueManagement>
