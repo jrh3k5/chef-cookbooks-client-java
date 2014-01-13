@@ -24,7 +24,7 @@ limitations under the License.
     </parent>
     <groupId>com.github.jrh3k5</groupId>
     <artifactId>chef-cookbooks-client-java</artifactId>
-    <version>1.0</version>
+    <version>1.1-SNAPSHOT</version>
     <name>Chef Cookbooks Client (for Java)</name>
     <description>A client library for Java that reads data from the cookbooks API.</description>
     <properties>
@@ -37,7 +37,7 @@ limitations under the License.
         <connection>scm:git:git@github.com:jrh3k5/chef-cookbooks-client-java.git</connection>
         <developerConnection>scm:git:git@github.com:jrh3k5/chef-cookbooks-client-java.git</developerConnection>
         <url>https://github.com/jrh3k5/chef-cookbooks-client-java</url>
-      <tag>chef-cookbooks-client-java-1.0</tag>
+      <tag>HEAD</tag>
   </scm>
     <issueManagement>
         <system>GitHub</system>
