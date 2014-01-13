@@ -19,6 +19,10 @@ package com.github.jrh3k5.chef.client.jersey;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
@@ -29,6 +33,7 @@ import org.apache.commons.lang.builder.ToStringBuilder;
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.client.ClientProperties;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,7 +48,10 @@ import com.github.jrh3k5.chef.client.CookbookClient;
  */
 
 public class JerseyCookbookClient implements CookbookClient {
-    private static final String V1_API_URL = "https://cookbooks.opscode.com/api/v1/";
+    /**
+     * The v1 API URL for cookbooks.
+     */
+    public static final String V1_API_URL = "https://cookbooks.opscode.com/api/v1/";
     private static final int TIMEOUT_MS = 30000;
     private final Client client = getClient();
     private final String serviceUrl;
@@ -87,7 +95,9 @@ public class JerseyCookbookClient implements CookbookClient {
     public Cookbook getCookbook(String name) {
         final Response response = client.target(serviceUrl).path("cookbooks").path(name).request(MediaType.APPLICATION_JSON_TYPE).accept(MediaType.APPLICATION_JSON_TYPE).get();
         if (response.getStatus() == Response.Status.OK.getStatusCode()) {
-            return response.readEntity(JsonCookbook.class);
+            final JsonCookbook found = response.readEntity(JsonCookbook.class);
+            found.init();
+            return found;
         } else if (response.getStatus() == Response.Status.NOT_FOUND.getStatusCode()) {
             // The doc says 400, but the server returns 404
             // See: https://tickets.opscode.com/browse/CHEF-4950
@@ -166,6 +176,8 @@ public class JerseyCookbookClient implements CookbookClient {
 
     /**
      * A JSON object that represents a cookbook.
+     * <p />
+     * Instances of this class must be {@link #init() initialized} before use. This is to work around issues in Jackson that do not handle custom setters for classes well.
      * 
      * @author Joshua Hyde
      */
@@ -173,26 +185,48 @@ public class JerseyCookbookClient implements CookbookClient {
     public static class JsonCookbook implements Cookbook {
         @JsonProperty("latest_version")
         private URL latestVersionUrl;
-        private Version resolvedLatestVersion;
+        @JsonProperty("versions")
+        private URL[] versionUrls;
+        private final Map<String, String> versionUrlMappings = new HashMap<String, String>();
+        private final Map<String, JsonVersion> versions = new HashMap<String, JsonVersion>();
+        private String latestVersion;
         private String name;
 
         @Override
         public Version getLatestVersion() {
-            if (resolvedLatestVersion == null) {
-                final Client client = getClient();
-                try {
-                    this.resolvedLatestVersion = client.target(latestVersionUrl.toExternalForm()).request(MediaType.APPLICATION_JSON_TYPE).accept(MediaType.APPLICATION_JSON_TYPE)
-                            .get(JsonVersion.class);
-                } finally {
-                    client.close();
+            return resolveVersion(latestVersion);
+        }
+
+        /**
+         * Initialize the object.
+         */
+        public void init() {
+            final String latestVersionExternalForm = latestVersionUrl.toExternalForm();
+            for (URL versionUrl : versionUrls) {
+                final String externalVersionForm = versionUrl.toExternalForm();
+                final String versionNumber = externalVersionForm.substring(externalVersionForm.lastIndexOf('/') + 1).replaceAll("\\_", ".");
+                versionUrlMappings.put(versionNumber, externalVersionForm);
+                if (externalVersionForm.equals(latestVersionExternalForm)) {
+                    this.latestVersion = versionNumber;
                 }
             }
-            return resolvedLatestVersion;
         }
 
         @Override
         public String getName() {
             return name;
+        }
+
+        @Override
+        @JsonIgnore
+        public Version getVersion(String version) {
+            return resolveVersion(version);
+        }
+
+        @Override
+        @JsonIgnore
+        public Set<String> getVersions() {
+            return versionUrlMappings.keySet();
         }
 
         /**
@@ -203,6 +237,13 @@ public class JerseyCookbookClient implements CookbookClient {
          */
         public void setLatestVersion(URL latestVersionUrl) {
             this.latestVersionUrl = latestVersionUrl;
+            final String externalForm = latestVersionUrl.toExternalForm();
+            for (Entry<String, String> versionUrlMapping : versionUrlMappings.entrySet()) {
+                if (versionUrlMapping.getValue().equals(externalForm)) {
+                    this.latestVersion = versionUrlMapping.getKey();
+                    break;
+                }
+            }
         }
 
         /**
@@ -213,6 +254,26 @@ public class JerseyCookbookClient implements CookbookClient {
          */
         public void setName(String name) {
             this.name = name;
+        }
+
+        private JsonVersion resolveVersion(String version) {
+            if (versions.containsKey(version)) {
+                return versions.get(version);
+            }
+        
+            final String mappedUrl = versionUrlMappings.get(version);
+            if (mappedUrl == null) {
+                return null;
+            }
+        
+            final Client client = getClient();
+            try {
+                final JsonVersion resolvedVersion = client.target(mappedUrl).request(MediaType.APPLICATION_JSON_TYPE).accept(MediaType.APPLICATION_JSON_TYPE).get(JsonVersion.class);
+                versions.put(version, resolvedVersion);
+                return resolvedVersion;
+            } finally {
+                client.close();
+            }
         }
 
         /**

@@ -19,9 +19,22 @@ package com.github.jrh3k5.chef.client.jersey;
 
 import static org.fest.assertions.Assertions.assertThat;
 
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.core.MediaType;
+
+import org.glassfish.jersey.client.ClientConfig;
 import org.junit.After;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import com.github.jrh3k5.chef.client.Cookbook;
 import com.github.jrh3k5.chef.client.Cookbook.Version;
 
@@ -32,7 +45,33 @@ import com.github.jrh3k5.chef.client.Cookbook.Version;
  */
 
 public class JerseyCookbookClientITest {
+    private static JsonCookbookObject apacheCookbook;
+    private static List<JsonCookbookVersionObject> apacheVersions;
     private final JerseyCookbookClient cookbookClient = new JerseyCookbookClient();
+
+    @BeforeClass
+    public static void getApacheInfo() throws Exception {
+        final ClientConfig clientConfig = new ClientConfig();
+        clientConfig.register(JacksonJsonProvider.class);
+        final Client client = ClientBuilder.newClient(clientConfig);
+        try {
+            apacheCookbook = client.target(JerseyCookbookClient.V1_API_URL).path("cookbooks").path("apache").request(MediaType.APPLICATION_JSON_TYPE).accept(MediaType.APPLICATION_JSON_TYPE)
+                    .get(JsonCookbookObject.class);
+            final String latestVersionUrlString = apacheCookbook.getLatestVersion().toExternalForm();
+            apacheVersions = new ArrayList<JsonCookbookVersionObject>(apacheCookbook.versions.length);
+            for (URL version : apacheCookbook.versions) {
+                final JsonCookbookVersionObject versionObject = client.target(version.toURI()).request(MediaType.APPLICATION_JSON_TYPE).accept(MediaType.APPLICATION_JSON_TYPE)
+                        .get(JsonCookbookVersionObject.class);
+                versionObject.location = version;
+                apacheVersions.add(versionObject);
+                if (version.toExternalForm().equals(latestVersionUrlString)) {
+                    apacheCookbook.setLatestVersionObject(versionObject);
+                }
+            }
+        } finally {
+            client.close();
+        }
+    }
 
     @After
     public void closeClient() throws Exception {
@@ -47,14 +86,22 @@ public class JerseyCookbookClientITest {
      */
     @Test
     public void testGetCookbook() throws Exception {
-        final Cookbook cookbook = cookbookClient.getCookbook("flume_agent");
+        final Cookbook cookbook = cookbookClient.getCookbook(apacheCookbook.getName());
         assertThat(cookbook).isNotNull();
-        assertThat(cookbook.getName()).isEqualTo("flume_agent");
+        assertThat(cookbook.getName()).isEqualTo(apacheCookbook.getName());
 
         final Version version = cookbook.getLatestVersion();
-        assertThat(version.getVersion()).isEqualTo("1.0.0");
-        assertThat(version.getFileLocation().toExternalForm()).isEqualTo(
-                "http://s3.amazonaws.com/community-files.opscode.com/cookbook_versions/tarballs/5548/original/flume_agent-1.0.0.tar.gz?1389496746");
+        assertThat(version.getVersion()).isEqualTo(apacheCookbook.getLatestVersionName());
+        assertThat(version.getFileLocation().toExternalForm()).isEqualTo(apacheCookbook.getLatestVersionObject().getFile().toExternalForm());
+
+        // Test each of the known versions
+        for (JsonCookbookVersionObject versionObject : apacheVersions) {
+            final String versionName = JsonCookbookObject.getVersionName(versionObject.location);
+            final Version matchedVersion = cookbook.getVersion(versionName);
+            assertThat(matchedVersion).isNotNull();
+            assertThat(matchedVersion.getFileLocation().toExternalForm()).isEqualTo(versionObject.file.toExternalForm());
+            assertThat(matchedVersion.getVersion()).isEqualTo(versionObject.version);
+        }
     }
 
     /**
@@ -67,5 +114,96 @@ public class JerseyCookbookClientITest {
     public void testGetCookbookNotFound() throws Exception {
         final Cookbook cookbook = cookbookClient.getCookbook("this_should_never_be_founds");
         assertThat(cookbook).isNull();
+    }
+
+    /**
+     * A JSON representation of the Chef response for retrieving cookbooks.
+     * 
+     * @author Joshua Hyde
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    static class JsonCookbookObject {
+        private String name;
+        private URL[] versions;
+        @JsonProperty("latest_version")
+        private URL latestVersion;
+        private JsonCookbookVersionObject latestVersionObject;
+
+        public void setLatestVersion(URL latestVersion) {
+            this.latestVersion = latestVersion;
+        }
+
+        public URL getLatestVersion() {
+            return latestVersion;
+        }
+
+        public void setVersions(URL[] versions) {
+            this.versions = versions;
+        }
+
+        public URL[] getVersions() {
+            return versions;
+        }
+
+        public void setLatestVersionObject(JsonCookbookVersionObject latestVersionObject) {
+            this.latestVersionObject = latestVersionObject;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public JsonCookbookVersionObject getLatestVersionObject() {
+            return latestVersionObject;
+        }
+
+        public String getLatestVersionName() {
+            return getVersionName(latestVersion);
+        }
+
+        /**
+         * Parse the identifier of a version from the given URL.
+         * 
+         * @param url
+         *            A {@link URL} object representing the location of information about a specific version of a Chef cookbook.
+         * @return The version identifier.
+         */
+        public static String getVersionName(URL url) {
+            final String externalForm = url.toExternalForm();
+            final String underscored = externalForm.substring(externalForm.lastIndexOf('/') + 1);
+            return underscored.replaceAll("\\_", ".");
+        }
+    }
+
+    /**
+     * A JSON object representing the response of the Chef server for a specific cookbook version.
+     * 
+     * @author Joshua Hyde
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    static class JsonCookbookVersionObject {
+        URL location;
+        URL file;
+        String version;
+
+        public void setFile(URL file) {
+            this.file = file;
+        }
+
+        public URL getFile() {
+            return file;
+        }
+
+        public void setVersion(String version) {
+            this.version = version;
+        }
+
+        public String getVersion() {
+            return version;
+        }
     }
 }

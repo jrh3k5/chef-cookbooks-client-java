@@ -18,6 +18,7 @@
 package com.github.jrh3k5.chef.client;
 
 import java.net.URL;
+import java.util.Set;
 
 /**
  * Definition of an object that represents a cookbook.
@@ -40,9 +41,40 @@ public interface Cookbook {
      */
     String getName();
 
+    /**
+     * Get a specific version of the cookbook.
+     * 
+     * @param version
+     *            The desired version of the cookbook to retrieve.
+     * @return {@code null} if the given version cannot be found; otherwise, a {@link Version} object representing the desired version.
+     */
+    Version getVersion(String version);
+
+    /**
+     * Get the known versions of this cookbook.
+     * 
+     * @return The known versions of this cookbook.
+     */
+    Set<String> getVersions();
+
+    /**
+     * Definition of a information about a version of a cookbook.
+     * 
+     * @author Joshua Hyde
+     */
     public static interface Version {
+        /**
+         * Get the location of the archive of this version of a cookbook.
+         * 
+         * @return A {@link URL} representing the location of the archive file.
+         */
         URL getFileLocation();
 
+        /**
+         * Get the version of the cookbook.
+         * 
+         * @return The version of the cookbook represented by this object.
+         */
         String getVersion();
     }
 }

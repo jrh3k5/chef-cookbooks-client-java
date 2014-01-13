@@ -29,15 +29,23 @@ The following examples show how to retrieve a cookbook's information. If the coo
 
 ### Get Cookbook
 
-Once you've retrieved a cookbook's information, you can actually download it through <tt>Cookbook.Version</tt> interface. Currently, only retrieving the latest version is supported:
+Once you've retrieved a cookbook's information, you can actually download it through <tt>Cookbook.Version</tt> interface.
 
     import com.github.jrh3k5.chef.client.Cookbook.Version;
     import com.github.jrh3k5.chef.client.Cookbook;
     import java.net.URL;
     
     final Cookbook cookbook = ...;
+    // Get the latest version
     final Cookbook.Version latestVersion = cookbook.getLatestVersion();
-    final URL cookbookTarballLocation = latestVersion.getFileLocation();
+    final URL latestTarballLocation = latestVersion.getFileLocation();
+    
+    final Cookbook.Version v1Version = cookbook.getVersion("1.0.0");
+    assert v1Version != null;
+    final URL v1TarballLocation = v1Version.getFileLocation():
+    
+    final Cookbook.Version notFoundVersion = cookbook.getVersion("not.found");
+    assert notFoundVersion == null;
     
     // Do whatever you want now that you have the tarball location!
 
